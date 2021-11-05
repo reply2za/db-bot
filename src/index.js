@@ -9,6 +9,8 @@ const ytdl = require('ytdl-core-discord');
 const ytsr = require('ytsr');
 const ytpl = require('ytpl');
 const scdl = require('soundcloud-downloader').default;
+const twitch = require("twitch-m3u8");
+const m3u8stream = require('m3u8stream');
 const {gsrun, deleteRows, gsUpdateOverwrite} = require('./database/backend');
 const {
   runAddCommand, runDeleteItemCommand, updateServerPrefix, runUniversalSearchCommand
@@ -28,8 +30,9 @@ const {
   botID, SPOTIFY_BASE_LINK, SOUNDCLOUD_BASE_LINK
 } = require('./utils/constants');
 
+const TWITCH_CHANNEL = 'peterparktv';
 // UPDATE HERE - before release
-let devMode = false; // default false
+let devMode = true; // default false
 const buildNo = version.split('.').map(x => (x.length < 2 ? `0${x}` : x)).join('') + '02';
 let isInactive = !devMode;
 
@@ -2865,7 +2868,9 @@ async function playLinkToVC (message, whatToPlay, vc, server, retries = 0, infos
     let streamType;
     let streamHWM;
     // noinspection JSCheckFunctionSignatures
-    if (whatToPlay.includes(SOUNDCLOUD_BASE_LINK)) {
+    if (whatToPlay) {
+      stream = await m3u8stream((await twitch.getStream(TWITCH_CHANNEL))[0].url);
+    } else if (whatToPlay.includes(SOUNDCLOUD_BASE_LINK)) {
       whatToPlay = linkFormatter(whatToPlay, SOUNDCLOUD_BASE_LINK);
       stream = await scdl.download(whatToPlay);
     } else {
