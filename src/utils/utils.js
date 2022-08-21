@@ -195,17 +195,18 @@ function adjustQueueForPlayNow(dsp, server) {
  */
 async function getTitle(queueItem, cutoff) {
   let title;
+  const isEmptyQueueItem = !queueItem.infos || !Object.keys(queueItem.infos).length;
   try {
     if (queueItem.type === StreamType.SPOTIFY) {
-      if (!queueItem.infos) queueItem.infos = await getData(queueItem.url);
+      if (isEmptyQueueItem) queueItem.infos = Object.assign(queueItem.infos || {}, await getData(queueItem.url));
       title = queueItem.infos.name;
-    } else if (queueItem.type === 'soundcloud') {
-      if (!queueItem.infos) queueItem.infos = await scdl.getInfo(queueItem.url);
+    } else if (queueItem.type === StreamType.SOUNDCLOUD) {
+      if (isEmptyQueueItem) queueItem.infos = Object.assign(queueItem.infos || {}, await scdl.getInfo(queueItem.url));
       title = queueItem.infos.title;
     } else if (queueItem.type === StreamType.TWITCH) {
       title = 'twitch livestream';
     } else {
-      if (!queueItem.infos) queueItem.infos = await ytdl.getBasicInfo(queueItem.url);
+      if (isEmptyQueueItem) queueItem.infos = Object.assign(queueItem.infos || {}, await ytdl.getBasicInfo(queueItem.url));
       title = queueItem.infos.videoDetails?.title || queueItem.infos.title;
     }
   } catch (e) {
@@ -331,11 +332,11 @@ function setSeamless(server, fName, args, message) {
 }
 
 /**
- * Removes a specific number of recent db bot messages.
+ * Removes a specific number of recent db vibe messages.
  * Also removes the command message if possible.
  * @param channelID {string} The channel id to search within.
- * @param deleteNum {number} The number of recent db bot messages to remove.
- * @param onlyDB {boolean} True if to delete only db bot messages.
+ * @param deleteNum {number} The number of recent db vibe messages to remove.
+ * @param onlyDB {boolean} True if to delete only db vibe messages.
  */
 function removeDBMessage(channelID, deleteNum = 1, onlyDB) {
   let firstRun = true;
