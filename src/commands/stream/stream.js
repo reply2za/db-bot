@@ -2,7 +2,6 @@
 const {
   botInVC, catchVCJoinError, getLinkType, linkFormatter, convertYTFormatToMS, verifyUrl, endStream, pauseComputation,
   playComputation, logError, formatDuration, createQueueItem, getQueueText, verifyPlaylist, getSheetName, resetSession,
-  disconnectConnection,
 } = require('../../utils/utils');
 const {
   StreamType, SPOTIFY_BASE_LINK, whatspMap, commandsMap, SOUNDCLOUD_BASE_LINK, TWITCH_BASE_LINK,
@@ -26,13 +25,13 @@ const {MessageEmbed} = require('discord.js');
 const {getAssumption} = require('../database/search');
 const {getXdb2} = require('../database/retrieval');
 const {hasDJPermissions} = require('../../utils/permissions');
-const {stopPlayingUtil, voteSystem, pauseCommandUtil} = require('./utils');
+const {stopPlayingUtil, voteSystem, pauseCommandUtil, endAudioDuringSession, disconnectConnection} = require('./utils');
 const {runPlayCommand} = require('../play');
 const {runKeysCommand} = require('../keys');
 const {
   createAudioResource,
   createAudioPlayer,
-  StreamType: VoiceStreamType, getVoiceConnection,
+  StreamType: VoiceStreamType,
 } = require('@discordjs/voice');
 const CH = require('../../../channel.json');
 const fluentFfmpeg = require('fluent-ffmpeg');
@@ -109,16 +108,16 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
   if (queueItem.type === StreamType.SPOTIFY) {
     whatToPlay = linkFormatter(whatToPlay, SPOTIFY_BASE_LINK);
     const urlRes = await getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay);
-      if (urlRes.ok){
-        urlAlt = urlRes.url; // the alternative url to play
-      } else {
-        if (!retries) return playLinkToVC(message, queueItem, vc, server, ++retries, seekSec);
-        message.channel.send(urlRes.errorMsg);
-        whatspMap[vc.id] = '';
-        skipLink(message, vc, false, server, true);
-        return;
-      }
+    if (urlRes.ok) {
+      urlAlt = urlRes.url; // the alternative url to play
+    } else {
+      if (!retries) return playLinkToVC(message, queueItem, vc, server, ++retries, seekSec);
+      message.channel.send(urlRes.errorMsg);
+      whatspMap[vc.id] = '';
+      skipLink(message, vc, false, server, true);
+      return;
     }
+  }
   whatspMap[vc.id] = whatToPlay;
   // remove previous embed buttons
   if (server.numSinceLastEmbed > 4 && server.currentEmbed &&
@@ -252,10 +251,13 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
           console.log(e);
         }
       }
-      server.mapFinishedLinks.set(whatToPlay, {queueItem, numOfPlays: (server.mapFinishedLinks.get(whatToPlay)?.numOfPlays ||  0) + 1});
+      server.mapFinishedLinks.set(whatToPlay,
+        {
+          queueItem,
+          numOfPlays: (server.mapFinishedLinks.get(whatToPlay)?.numOfPlays || 0) + 1,
+        });
       if (vc.members.size < 2) {
         disconnectConnection(server, connection);
-        processStats.removeActiveStream(message.guild.id);
       } else if (server.loop) {
         playLinkToVC(message, queueItem, vc, server, undefined, undefined);
       } else {
@@ -265,10 +267,8 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
         } else if (server.autoplay) {
           runAutoplayCommand(message, server, vc, queueItem);
         } else {
-          if (server.collector) server.collector.stop();
-          updateActiveEmbed(server);
+          endAudioDuringSession(server);
           server.leaveVCTimeout = setTimeout(() => disconnectConnection(server, connection), LEAVE_VC_TIMEOUT);
-          processStats.removeActiveStream(message.guild.id);
         }
       }
       if (server?.followUpMessage) {
@@ -299,7 +299,6 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
         } else {
           console.log('status code 404 error');
           disconnectConnection(server, connection);
-          processStats.removeActiveStream(message.guild.id);
           message.channel.send('*db vibe appears to be facing some issues: automated diagnosis is underway.*').then(() => {
             console.log(e);
             // noinspection JSUnresolvedFunction
@@ -327,9 +326,8 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
     console.log(e);
     if (server.skipTimes > 3) {
       disconnectConnection(server, connection);
-      processStats.removeActiveStream(message.guild.id);
       message.channel.send('***db vibe is facing some issues, may restart***');
-      checkStatusOfYtdl(server, message);
+      checkStatusOfYtdl(processStats.servers.get(CH['check-in-guild']), message).then();
       return;
     } else {
       server.skipTimes++;
@@ -366,7 +364,7 @@ async function getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay
         console.log(e);
         return {
           ok: false,
-          errorMsg: `error: could not get link metadata <${whatToPlay}>`
+          errorMsg: `error: could not get link metadata <${whatToPlay}>`,
         };
       }
     }
@@ -387,7 +385,7 @@ async function getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay
       } else {
         return {
           ok: false,
-          errorMsg: `link not playable: <${search.items[itemIndex].url}>`
+          errorMsg: `link not playable: <${search.items[itemIndex].url}>`,
         };
       }
       const spotifyDuration = parseInt(queueItem.infos.duration_ms);
@@ -408,17 +406,16 @@ async function getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay
     }
     if (search.items[itemIndex]) {
       queueItem.urlAlt = search.items[itemIndex].url;
-    }
-    else {
+    } else {
       return {
         ok: false,
-        errorMsg: `could not find <${whatToPlay}>`
+        errorMsg: `could not find <${whatToPlay}>`,
       };
     }
   }
   return {
     ok: true,
-    url: queueItem.urlAlt
+    url: queueItem.urlAlt,
   };
 }
 
@@ -445,8 +442,6 @@ function searchForBrokenLinkWithinDB(message, server, whatToPlayS) {
  */
 async function checkStatusOfYtdl(server, message) {
   // noinspection JSUnresolvedFunction
-  const connection = await server.audio.joinVoiceChannel((await bot.guilds.fetch(CH['check-in-guild'])), CH['check-in-voice']);
-
   const stream = await ytdl('https://www.youtube.com/watch?v=1Bix44C1EzY', {
     filter: () => ['251'],
     highWaterMark: 1 << 25,
@@ -454,6 +449,13 @@ async function checkStatusOfYtdl(server, message) {
   const player = createAudioPlayer();
   const resource = createAudioResource(stream, {inputType: VoiceStreamType.Opus});
   await new Promise((res) => setTimeout(res, 500));
+  let connection;
+  try {
+    connection = await server.audio.joinVoiceChannel((await bot.guilds.fetch(CH['check-in-guild'])), CH['check-in-voice']);
+  } catch (e) {
+    // if cannot join check-in voice channel, try the backup voice channel
+    connection = await server.audio.joinVoiceChannel((await bot.guilds.fetch(CH['check-in-guild'])), CH['check-in-voice-2']);
+  }
   try {
     connection.subscribe(player);
     player.play(resource);
@@ -472,8 +474,6 @@ async function checkStatusOfYtdl(server, message) {
   }
   setTimeout(() => {
     disconnectConnection(server, connection);
-    getVoiceConnection(server.guildId)?.disconnect();
-    bot.voice.adapters.get(server.guildId)?.destroy();
     if (message) message.channel.send('*self-diagnosis complete: db vibe does not appear to have any issues*');
   }, 6000);
 }
@@ -614,10 +614,14 @@ async function runSkipCommand(message, voiceChannel, server, skipTimes, sendSkip
     } else return;
   }
   if (server.audio.player) {
-    server.audio.player.pause();
+    pauseComputation(server);
     // add link to finished map if being played for over 100 seconds
     if (server.audio.resource?.playbackDuration > 100000 && server.queue[0]) {
-      server.mapFinishedLinks.set(server.queue[0].url, {queueItem: server.queue[0], numOfPlays: (server.mapFinishedLinks.get(server.queue[0].url)?.numOfPlays ||  0) + 1});
+      server.mapFinishedLinks.set(server.queue[0].url,
+        {
+          queueItem: server.queue[0],
+          numOfPlays: (server.mapFinishedLinks.get(server.queue[0].url)?.numOfPlays || 0) + 1,
+        });
     }
   }
   if (skipTimes) {
@@ -671,16 +675,14 @@ async function runAutoplayCommand(message, server, vc, queueItem) {
       if (uniqueVid) {
         server.queue.push(createQueueItem(uniqueVid, StreamType.YOUTUBE));
         playLinkToVC(message, server.queue[0], vc, server);
+        return; // EXIT on SUCCESS
       }
-      return;
     } catch (e) {}
     message.channel.send('*could not find a video to play*');
-    server.collector.stop();
-    server.audio.reset();
   } else {
     message.channel.send('*smartplay is not supported for this stream type*');
-    stopPlayingUtil(message.guild.id, vc, true, server, message, message.member);
   }
+  endAudioDuringSession(server);
 }
 
 /**
@@ -744,8 +746,8 @@ async function sendLinkAsEmbed(message, queueItem, voiceChannel, server, forceEm
       {
         inline: true,
         name: 'Queue',
-        value: getQueueText(server)
-      }
+        value: getQueueText(server),
+      },
     );
   } else {
     server.currentEmbedChannelId = '0';
@@ -753,8 +755,8 @@ async function sendLinkAsEmbed(message, queueItem, voiceChannel, server, forceEm
     embed.addFields({
       inline: true,
       name: '-',
-      value: 'Session ended'
-    })
+      value: 'Session ended',
+    });
     showButtons = false;
   }
   if (server.queue.length < 1 || server.queue[0]?.url === url) {

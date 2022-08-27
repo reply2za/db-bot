@@ -206,7 +206,9 @@ async function getTitle(queueItem, cutoff) {
     } else if (queueItem.type === StreamType.TWITCH) {
       title = 'twitch livestream';
     } else {
-      if (isEmptyQueueItem) queueItem.infos = Object.assign(queueItem.infos || {}, await ytdl.getBasicInfo(queueItem.url));
+      if (isEmptyQueueItem) {
+        queueItem.infos = Object.assign(queueItem.infos || {}, await ytdl.getBasicInfo(queueItem.url));
+      }
       title = queueItem.infos.videoDetails?.title || queueItem.infos.title;
     }
   } catch (e) {
@@ -409,11 +411,12 @@ function getBotDisplayName(guild) {
  * @param force {boolean=} Ignores the status of the dispatcher.
  */
 function pauseComputation(server, force = false) {
+  // placed 'removeActiveStream' before checks for resiliency
+  processStats.removeActiveStream(server.guildId);
   if (!server.audio.player) return;
   if (server.audio.status || force) {
     server.audio.player.pause();
     server.audio.status = false;
-    processStats.removeActiveStream(server.guildId);
   }
 }
 
@@ -514,22 +517,13 @@ function getVCMembers(guildId) {
  * @param title {string} The title of the embed.
  * @param text {string} The text of the embed.
  * @param color {string?} The color of the embed.
- * @param footer
- * @return {MessageEmbed}
+ * @return {MessageEmbed} The embed.
  */
-function createVisualEmbed(title, text, color, footer) {
+function createVisualEmbed(title, text, color) {
   return new MessageEmbed()
     .setTitle(title)
     .setDescription(text)
-    .setColor(color || '#0099ff')
-}
-
-/**
- * This method SHOULD be used instead of connection.disconnect. It will properly clean up the dispatcher and the player.
- */
-function disconnectConnection(server, connection){
-  server.audio.reset();
-  connection.disconnect();
+    .setColor(color || '#0099ff');
 }
 
 module.exports = {
@@ -538,5 +532,5 @@ module.exports = {
   getLinkType, createMemoryEmbed, convertSeekFormatToSec, removeDBMessage, catchVCJoinError,
   logError, pauseComputation, playComputation, getTimeActive, linkValidator, universalLinkFormatter,
   removeFormattingLink, getSheetName, isPersonalSheet, getBotDisplayName, notInVoiceChannelErrorMsg, getVCMembers,
-  createVisualEmbed, disconnectConnection
+  createVisualEmbed,
 };

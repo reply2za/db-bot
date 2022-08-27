@@ -12,7 +12,7 @@ const {gsrun, deleteRows} = require('./commands/database/api/api');
 const {
   formatDuration, botInVC, adjustQueueForPlayNow, verifyUrl, verifyPlaylist, resetSession, setSeamless, endStream,
   unshiftQueue, pushQueue, createQueueItem, createMemoryEmbed, convertSeekFormatToSec, logError, getTimeActive,
-  removeFormattingLink, getSheetName, linkValidator, createVisualEmbed, getTitle, disconnectConnection,
+  removeFormattingLink, getSheetName, linkValidator, createVisualEmbed, getTitle,
 } = require('./utils/utils');
 const {runHelpCommand} = require('./commands/help');
 const {runDictatorCommand, runDJCommand, clearDJTimer, runResignCommand} = require('./commands/dj');
@@ -57,6 +57,7 @@ const {runKeysCommand} = require('./commands/keys');
 const {getVoiceConnection} = require('@discordjs/voice');
 const {getJoke} = require('./commands/joke');
 const {runPurgeCommand} = require('./commands/purge');
+const {disconnectConnection} = require('./commands/stream/utils');
 
 process.setMaxListeners(0);
 
@@ -461,7 +462,7 @@ async function runCommandCases(message) {
     runPlayNowCommand(message, args, mgid, server, getSheetName(message.member.id)).then();
     break;
   case 'shuffle':
-    if (!args[1]){
+    if (!args[1]) {
       shuffleQueue(server, message);
     } else {
       runRandomToQueue(args[1], message, mgid, server).then();
@@ -710,7 +711,7 @@ async function runCommandCases(message) {
   case 'plays':
   case 'freq':
   case 'frequency':
-    let tempAuditArray = [];
+    const tempAuditArray = [];
     for (const [key, value] of server.mapFinishedLinks) {
       tempAuditArray.push({url: key, title: (await getTitle(value.queueItem)), index: value.numOfPlays});
     }
@@ -720,13 +721,13 @@ async function runCommandCases(message) {
     message.channel.send({embeds: [
       createVisualEmbed('Link Frequency',
         ((await createVisualText(server, tempAuditArray,
-          (index, title, url) => `${index} | [${title}](${url})\n`)) || 'no completed links'))
-      ]});
+          (index, title, url) => `${index} | [${title}](${url})\n`)) || 'no completed links')),
+    ]});
     break;
-    case 'purge':
-      if (!args[1]) return message.channel.send('*input a term to purge from the queue*');
-      await runPurgeCommand(message, server, args.slice(1).join(' ').toLowerCase());
-      break;
+  case 'purge':
+    if (!args[1]) return message.channel.send('*input a term to purge from the queue*');
+    await runPurgeCommand(message, server, args.slice(1).join(' ').toLowerCase());
+    break;
   case 'prefix':
     message.channel.send('use the command `changeprefix` to change the bot\'s prefix');
     break;
@@ -1069,6 +1070,13 @@ async function runCommandCases(message) {
   case 'gzupdate':
     devUpdateCommand(message, args.splice(1));
     break;
+  case 'gzdebug':
+    if (server.queue[0]) {
+      message.channel.send(`url: ${server.queue[0].url}\nurlAlt: ${server.queue[0].urlAlt}`);
+    } else {
+      message.channel.send('nothing is playing right now');
+    }
+    break;
   case 'gzc':
     const commandsMapEmbed = new MessageEmbed();
     let commandsMapString = '';
@@ -1224,11 +1232,11 @@ bot.once('ready', () => {
     buildNo.decrementBuildNo();
   }
   // noinspection JSUnresolvedFunction
+  processStats.initializeServer(CH['check-in-guild']);
   if (processStats.devMode) {
     console.log('-devmode enabled-');
     processStats.setProcessActive();
   } else {
-    processStats.initializeServer(CH['check-in-guild']);
     checkStatusOfYtdl(processStats.servers.get(CH['check-in-guild'])).then();
     processStats.setProcessInactive();
     bot.user.setActivity('beats | .db-vibe', {type: 'PLAYING'});
@@ -1314,15 +1322,17 @@ function devUpdateCommand(message, args = []) {
     if (args[0] === 'force') {
       args.splice(0, 1);
     } else {
-      message?.channel.send('***people are using the bot:*** *to force an update type \`force\` after the command*');
+      message?.channel.send(
+        '***people are using the bot:*** *to force an update type \`force\` immediately after the command*',
+      );
       return;
     }
   }
   if (!args[0]) {
-    exec('git stash && git pull && npm upgrade && npm i && pm2 restart vibe');
+    exec('git stash && git pull && npm i && pm2 restart vibe');
     processStats.setProcessInactive();
   } else if (args[0] === 'all') {
-    exec('git stash && git pull && npm upgrade && npm i && pm2 restart 0 && pm2 restart 1');
+    exec('git stash && git pull && npm i && pm2 restart 0 && pm2 restart 1');
     processStats.setProcessInactive();
   } else if (args[0] === 'custom' && args[1]) {
     exec(args.slice(1).join(' '));
