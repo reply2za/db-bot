@@ -1,5 +1,5 @@
-const {startupDevMode} = require('./constants');
-const {AudioImpl} = require('./AudioImpl');
+const { startupDevMode } = require('./constants');
+const { AudioImpl } = require('./AudioImpl');
 
 // process related statistics
 class ProcessStats {
@@ -194,8 +194,8 @@ class ProcessStats {
       // error manager - keep track of errors
       errors: {
         // if a reaction permissions error occurred
-        permissionReaction: false
-      }
+        permissionReaction: false,
+      },
     });
   }
 }

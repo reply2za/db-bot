@@ -1,7 +1,7 @@
-const {botID} = require('../../utils/lib/constants');
-const {pauseComputation, playComputation, botInVC} = require('../../utils/utils');
-const {createEmbed, updateActiveEmbed} = require('../../utils/embed');
-const {getVoiceConnection} = require('@discordjs/voice');
+const { botID } = require('../../utils/lib/constants');
+const { pauseComputation, playComputation, botInVC } = require('../../utils/utils');
+const { createEmbed, updateActiveEmbed } = require('../../utils/embed');
+const { getVoiceConnection } = require('@discordjs/voice');
 const processStats = require('../../utils/lib/ProcessStats');
 
 /**
@@ -51,7 +51,7 @@ function voteSystem(message, mgid, commandName, voter, votes, server) {
  * @param server The server playback metadata
  * @param noErrorMsg Optional - If to avoid an error message if nothing is playing
  * @param force Optional - Skips the voting system if DJ mode is on
- * @param noPrintMsg Optional - Whether to print a message to the channel when not in DJ mode
+ * @param noPrintMsg Optional - Whether to NOT print a message to the channel [DJ mode will set this to true]
  * @returns {boolean} if successful
  */
 function pauseCommandUtil(message, actionUser, server, noErrorMsg, force, noPrintMsg) {
@@ -60,22 +60,24 @@ function pauseCommandUtil(message, actionUser, server, noErrorMsg, force, noPrin
       return message.channel.send('only the dictator can pause');
     }
     if (server.voteAdmin.length > 0) {
-      if (force) server.votePlayPauseMembersId = [];
-      else {
-        if (voteSystem(message, message.guild.id, 'pause', actionUser, server.votePlayPauseMembersId, server)) {
-          noPrintMsg = true;
-        } else return false;
+      if (force) {server.votePlayPauseMembersId = [];}
+      else if (voteSystem(message, message.guild.id, 'pause', actionUser, server.votePlayPauseMembersId, server)) {
+        noPrintMsg = true;
       }
+      else {return false;}
     }
     pauseComputation(server);
-    if (noPrintMsg) return true;
-    if (server.followUpMessage) {
-      server.followUpMessage.delete();
-      server.followUpMessage = undefined;
+    if (!noPrintMsg) {
+      // if we are printing a message then delete previous playback status
+      if (server.followUpMessage) {
+        server.followUpMessage.delete();
+        server.followUpMessage = undefined;
+      }
+      message.channel.send('*paused*');
     }
-    message.channel.send('*paused*');
     return true;
-  } else if (!noErrorMsg) {
+  }
+  else if (!noErrorMsg) {
     message.channel.send('nothing is playing right now');
     return false;
   }
@@ -88,8 +90,8 @@ function pauseCommandUtil(message, actionUser, server, noErrorMsg, force, noPrin
  * @param server The server playback metadata
  * @param noErrorMsg {*?} Optional - If to avoid an error message if nothing is playing
  * @param force {*?} Optional - Skips the voting system if DJ mode is on
- * @param noPrintMsg {*?} Optional - Whether to print a message to the channel when not in DJ mode
- * @returns {boolean}
+ * @param noPrintMsg {*?} Optional - Whether to NOT print a message to the channel [DJ mode will set this to true]
+ * @returns {boolean} if the request was successful
  */
 function playCommandUtil(message, actionUser, server, noErrorMsg, force, noPrintMsg) {
   if (actionUser.voice && botInVC(message) && server.audio.isVoiceChannelMember(actionUser)) {
@@ -97,22 +99,24 @@ function playCommandUtil(message, actionUser, server, noErrorMsg, force, noPrint
       return message.channel.send('only the dictator can play');
     }
     if (server.voteAdmin.length > 0) {
-      if (force) server.votePlayPauseMembersId = [];
-      else {
-        if (voteSystem(message, message.guild.id, 'play', actionUser, server.votePlayPauseMembersId, server)) {
-          noPrintMsg = true;
-        } else return false;
+      if (force) {server.votePlayPauseMembersId = [];}
+      else if (voteSystem(message, message.guild.id, 'play', actionUser, server.votePlayPauseMembersId, server)) {
+        noPrintMsg = true;
       }
+      else {return false;}
     }
     playComputation(server);
-    if (noPrintMsg) return true;
-    if (server.followUpMessage) {
-      server.followUpMessage.delete();
-      server.followUpMessage = undefined;
+    if (!noPrintMsg) {
+      // if we are printing a message then delete previous playback status
+      if (server.followUpMessage) {
+        server.followUpMessage.delete();
+        server.followUpMessage = undefined;
+      }
+      message.channel.send('*playing*');
     }
-    message.channel.send('*playing*');
     return true;
-  } else if (!noErrorMsg) {
+  }
+  else if (!noErrorMsg) {
     message.channel.send('nothing is playing right now');
     return false;
   }
@@ -146,7 +150,8 @@ function stopPlayingUtil(mgid, voiceChannel, stayInVC, server, message, actionUs
     setTimeout(() => {
       processStats.disconnectConnection(server, getVoiceConnection(mgid));
     }, 600);
-  } else {
+  }
+  else {
     if (server.currentEmbed) {
       createEmbed(lastPlayed.url, lastPlayed.infos).then((e) => {
         e.embed.addFields({
@@ -171,7 +176,8 @@ function endAudioDuringSession(server) {
   pauseComputation(server); // active stream should be removed here
   try {
     server.collector?.stop();
-  } catch (e) {}
+  }
+  catch (e) {}
 }
 
 module.exports = {
