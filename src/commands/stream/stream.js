@@ -18,7 +18,7 @@ const { SoundCloud: scdl } = require('scdl-core');
 scdl.connect();
 const { createEmbed } = require('../../utils/embed');
 const processStats = require('../../utils/lib/ProcessStats');
-const { shutdown } = require('../../utils/shutdown');
+const { shutdown } = require('../../process/shutdown');
 const { reactions } = require('../../utils/lib/reactions');
 const { getXdb2 } = require('../../database/retrieval');
 const { stopPlayingUtil, voteSystem, pauseCommandUtil, endAudioDuringSession, playCommandUtil } = require('./utils');
@@ -37,7 +37,7 @@ const { EmbedBuilderLocal } = require('../../utils/lib/EmbedBuilderLocal');
  * @param message {import('discord.js').Message} The message that triggered the bot.
  * @param queueItem The queue item to play (see createQueueItem).
  * @param vc The voice channel to play the song in.
- * @param server The server playback metadata.
+ * @param server {LocalServer} The server playback metadata.
  * @param retries {number} Optional - Integer representing the number of retries.
  * @param seekSec {number} Optional - The amount to seek in seconds
  * @returns {Promise<void>}
@@ -51,7 +51,7 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
     }
   }
   if (processStats.isInactive) {
-    message.channel.send(`*${message.guild.me.user.username} has been updated*`);
+    message.channel.send(`*${message.guild.members.me.user.username} has been updated*`);
     return stopPlayingUtil(message.guild.id, vc, false, server);
   }
   if (server.leaveVCTimeout) {
@@ -111,9 +111,10 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
   if (!queueItem.type) queueItem.type = getLinkType(whatToPlay);
   if (queueItem.type === StreamType.SPOTIFY) {
     whatToPlay = linkFormatter(whatToPlay, SPOTIFY_BASE_LINK);
-    const urlRes = await getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay);
+    const urlRes = await getYTUrlFromSpotifyUrl(queueItem, whatToPlay);
     if (urlRes.ok) {
-      urlAlt = urlRes.url; // the alternative url to play
+      // the alternative url to play
+      urlAlt = urlRes.url;
     }
     else {
       if (!retries) return playLinkToVC(message, queueItem, vc, server, ++retries, seekSec);
@@ -337,7 +338,7 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
     if (server.skipTimes > 3) {
       processStats.disconnectConnection(server, connection);
       message.channel.send('***db vibe is facing some issues, may restart***');
-      checkStatusOfYtdl(processStats.servers.get(CH['check-in-guild']), message).then();
+      checkStatusOfYtdl(processStats.getServer(CH['check-in-guild']), message).then();
       return;
     }
     else {
@@ -354,18 +355,19 @@ async function playLinkToVC(message, queueItem, vc, server, retries = 0, seekSec
     // noinspection JSUnresolvedFunction
     logError(`there was a playback error within playLinkToVC: ${whatToPlay}`);
     logError(e.toString().substring(0, 1910));
-  } // end of try catch
+    // end of try catch
+  }
   // load the next link if conditions are met
   if (server.queue[1]?.type === StreamType.SPOTIFY && !server.queue[1].urlAlt) {
     // the next link to play
     const nextQueueItem = server.queue[1];
     // the next link to play, formatted
     const whatToPlay2Formatted = linkFormatter(nextQueueItem.url, SPOTIFY_BASE_LINK);
-    getYTUrlFromSpotifyUrl(message, nextQueueItem, vc, server, whatToPlay2Formatted);
+    getYTUrlFromSpotifyUrl(nextQueueItem, whatToPlay2Formatted);
   }
 }
 
-async function getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay) {
+async function getYTUrlFromSpotifyUrl(queueItem, whatToPlay) {
   if (!queueItem.urlAlt) {
     let itemIndex = 0;
     if (!queueItem.infos) {
@@ -440,7 +442,7 @@ async function getYTUrlFromSpotifyUrl(message, queueItem, vc, server, whatToPlay
 /**
  * Searches the guild db and personal message db for a broken link
  * @param message The message
- * @param server The server
+ * @param server {LocalServer} The server
  * @param whatToPlayS The broken link provided as a string
  */
 function searchForBrokenLinkWithinDB(message, server, whatToPlayS) {
@@ -455,7 +457,7 @@ function searchForBrokenLinkWithinDB(message, server, whatToPlayS) {
 
 /**
  * Checks the status of ytdl-core-discord and exits the active process if the test link is unplayable.
- * @param server The server metadata.
+ * @param server {LocalServer} The server metadata.
  * @param message The message metadata to send a response to the appropriate channel
  */
 async function checkStatusOfYtdl(server, message) {
@@ -504,7 +506,7 @@ async function checkStatusOfYtdl(server, message) {
  * @param message the message that triggered the bot
  * @param voiceChannel the voice channel that the bot is in
  * @param playMessageToChannel whether to play message on successful skip
- * @param server The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @param noHistory Optional - true excludes link from the queue history
  */
 async function skipLink(message, voiceChannel, playMessageToChannel, server, noHistory) {
@@ -555,7 +557,7 @@ async function skipLink(message, voiceChannel, playMessageToChannel, server, noH
  * @param ignoreSingleRewind whether to print out the rewind text
  * @param force true can override votes during DJ mode
  * @param mem The metadata of the member using the command, used for DJ mode
- * @param server The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @returns {*}
  */
 function runRewindCommand(message, mgid, voiceChannel, numberOfTimes, ignoreSingleRewind, force, mem, server) {
@@ -566,7 +568,7 @@ function runRewindCommand(message, mgid, voiceChannel, numberOfTimes, ignoreSing
     return message.channel.send('only the dictator can perform this action');
   }
   // boolean to determine if there is a song
-  let queueItem;
+  let isQueueItem;
   let rewindTimes = 1;
   try {
     if (numberOfTimes) {
@@ -592,20 +594,19 @@ function runRewindCommand(message, mgid, voiceChannel, numberOfTimes, ignoreSing
       return message.channel.send('*max queue size has been reached, cannot rewind further*');
     }
     // assumes there is no queueItem to enter while
-    queueItem = false;
+    isQueueItem = false;
     // remove undefined links from queueHistory
-    while (server.queueHistory.length > 0 && !queueItem) {
-      queueItem = server.queueHistory.pop();
+    while (server.queueHistory.length > 0 && !isQueueItem) {
+      isQueueItem = server.queueHistory.pop();
     }
-    if (queueItem) server.queue.unshift(queueItem);
+    if (isQueueItem) server.queue.unshift(isQueueItem);
     rwIncrementor++;
   }
-  if (queueItem) {
-    if (ignoreSingleRewind) {}
-    else {
+  if (isQueueItem) {
+    if (!ignoreSingleRewind) {
       message.channel.send('*rewound' + (rewindTimes === 1 ? '*' : ` ${rwIncrementor} times*`));
     }
-    playLinkToVC(message, queueItem, voiceChannel, server);
+    playLinkToVC(message, isQueueItem, voiceChannel, server);
   }
   else if (server.queue[0]) {
     playLinkToVC(message, server.queue[0], voiceChannel, server);
@@ -625,7 +626,7 @@ function runRewindCommand(message, mgid, voiceChannel, numberOfTimes, ignoreSing
  * Recommended if voice channel is not present.
  * @param message the message that triggered the bot
  * @param voiceChannel The active voice channel
- * @param server The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @param skipTimes Optional - the number of times to skip
  * @param sendSkipMsg Whether to send a 'skipped' message when a single link is skipped
  * @param forceSkip Optional - If there is a DJ, grants force skip abilities
@@ -695,7 +696,7 @@ async function runSkipCommand(message, voiceChannel, server, skipTimes, sendSkip
 /**
  * Autoplay to the next recommendation. Assumes that the queue is empty.
  * @param message The message metadata.
- * @param server The server.
+ * @param server {LocalServer} The server.
  * @param vc The voice channel to be played in.
  * @param queueItem The last queueItem.
  * @returns {Promise<void>}
@@ -715,7 +716,8 @@ async function runAutoplayCommand(message, server, vc, queueItem) {
       if (uniqueVid) {
         server.queue.push(createQueueItem(uniqueVid, StreamType.YOUTUBE));
         playLinkToVC(message, server.queue[0], vc, server);
-        return; // EXIT on SUCCESS
+        // EXIT on SUCCESS
+        return;
       }
     }
     catch (e) {}
@@ -752,7 +754,7 @@ async function getRecLink(whatToPlay, infos, index = 0) {
  * @param message {any} The message to send the channel to
  * @param queueItem {Object} the queueItem to generate the embed for
  * @param voiceChannel {any} the voice channel that the link is being played in, if playing
- * @param server {Object} The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @param forceEmbed {Boolean} Force the embed to be re-sent in the text channel
  * @returns {Promise<any | void>} An updated queueItem (see createQueueItem) if successful.
  */
@@ -833,7 +835,7 @@ async function sendLinkAsEmbed(message, queueItem, voiceChannel, server, forceEm
  * Sends a new message embed to the channel. Is a helper for sendLinkAsEmbed.
  * @param channel {import(discord.js).TextChannel | import(discord.js).DMChannel | import(discord.js).NewsChannel}
  * Discord's Channel object. Used for sending the new embed.
- * @param server The server.
+ * @param server {LocalServer} The server.
  * @param forceEmbed {Boolean} If to keep the old embed and send a new one.
  * @param embed {EmbedBuilderLocal} The embed to send.
  * @returns {Promise<any>} The new message that was sent.
@@ -857,7 +859,7 @@ async function sendEmbedUpdate(channel, server, forceEmbed, embed) {
 /**
  * Generates the playback reactions and handles the collection of the reactions.
  * @param sentMsg The message that the bot sent
- * @param server The server metadata
+ * @param server {LocalServer} The server metadata
  * @param voiceChannel The voice channel metadata
  * @param timeMS The time for the reaction collector
  * @param mgid The message guild id
@@ -891,7 +893,8 @@ function generatePlaybackReactions(sentMsg, server, voiceChannel, timeMS, mgid) 
   timeMS += 7200000;
   const collector = sentMsg.createReactionCollector({ filter, time: timeMS, dispose: true });
   server.collector = collector;
-  let processingReaction = false; // if the bot is processing a reaction
+  // true if the bot is processing a reaction
+  let processingReaction = false;
   collector.on('collect', async (reaction, reactionCollector) => {
     if (!server.audio.player || !voiceChannel) return;
     switch (reaction.emoji.name) {

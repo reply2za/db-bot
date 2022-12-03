@@ -45,11 +45,11 @@ async function addCustomPlaylist(server, channel, sheetName, playlistName) {
  * @param args {Array<string>} [playlist-name (optional), key-name, link]
  * @param sheetName The name of the sheet to add to
  * @param printMsgToChannel Whether to print a response to the channel
- * @param server The server.
+ * @param server {LocalServer} The server.
  * @param member The member that is requesting the add.
  * @returns {*}
  */
-async function runAddCommandWrapper_P(channel, args, sheetName, printMsgToChannel, server, member) {
+async function runAddCommandWrapper(channel, args, sheetName, printMsgToChannel, server, member) {
   let playlistName;
   let keyName = args[0];
   let link = args[1];
@@ -125,4 +125,4 @@ async function runAddCommandWrapper_P(channel, args, sheetName, printMsgToChanne
   else channel.send('Could not add to your keys list. Put a desired name followed by a link. *(ex:\` ' + server.prefix + 'add [key] [link]\`)*');
 }
 
-module.exports = { runAddCommandWrapper_P, addCustomPlaylist };
+module.exports = { runAddCommandWrapper, addCustomPlaylist };

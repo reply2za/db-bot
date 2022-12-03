@@ -3,7 +3,7 @@ const { getTitle } = require('../utils/utils');
 /**
  * Purges an item from the queue.
  * @param message The message object.
- * @param server The server object.
+ * @param server {LocalServer} The server object.
  * @param term {string} The term to purge.
  * @return {Promise<void>}
  */
@@ -21,7 +21,8 @@ async function runPurgeCommand(message, server, term) {
  * @param arrayItemApplicator A function that determines if the term is within an array item.
  */
 async function purgeItem(array, arrayItemApplicator) {
-  let counter = 0; // counter for how many items were purged
+  // counter for how many items were purged
+  let counter = 0;
   for (let i = 1; i < array.length; i++) {
     if (await arrayItemApplicator(array[i])) {
       array.splice(i, 1);

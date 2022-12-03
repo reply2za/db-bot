@@ -11,7 +11,7 @@ const { EmbedBuilderLocal } = require('../../utils/lib/EmbedBuilderLocal');
  * Does not check for force disconnect.
  * @param message The discord message
  * @param playNow Bool, whether to override the queue
- * @param server The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @param searchTerm The specific phrase to search for, required if not provided a search result
  * @param indexToLookup {string | number?} The search index, requires searchResult to be valid
  * @param searchResult {Object?} The search results, used for recursive call with memoization
@@ -153,10 +153,10 @@ async function runYoutubeSearch(message, playNow, server, searchTerm, indexToLoo
       if (notActive) {
         notActive = false;
         reactionCollector2 = reactionCollector;
-        const filter = (m) => {
+        const awaitInputFilter = (m) => {
           return (m.author.id !== botID && reactionCollector.id === m.author.id);
         };
-        message.channel.awaitMessages({ filter, time: 60000, max: 1, errors: ['time'] })
+        message.channel.awaitMessages({ filter: awaitInputFilter, time: 60000, max: 1, errors: ['time'] })
           .then((messages) => {
             if (!reactionCollector2) return;
             const playNum = parseInt(messages.first().content && messages.first().content.trim());

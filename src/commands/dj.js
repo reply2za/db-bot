@@ -6,7 +6,7 @@ const { EmbedBuilderLocal } = require('../utils/lib/EmbedBuilderLocal');
  * @param message The message metadata
  * @param mgid The message guild id
  * @param prefixString The prefix string for the guild
- * @param server The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @returns {*}
  */
 function runDictatorCommand(message, mgid, prefixString, server) {
@@ -26,8 +26,9 @@ function runDictatorCommand(message, mgid, prefixString, server) {
       const dic = server.dictator;
       for (const i of vcMembersId) {
         if (i === dic.id) {
-          return message.channel.send((dic.nickname ? dic.nickname : dic.user.username) + ' is the dictator, and has control over ' +
-            (message.guild.me.nickname ? message.guild.me.nickname : message.guild.me.user.username));
+          return (message.channel.send((dic.nickname ? dic.nickname : dic.user.username) +
+            ' is the dictator, and has control over ' + (message.guild.members.me.nickname ?
+            message.guild.members.me.nickname : message.guild.members.me.user.username)));
         }
       }
       server.dictator = message.member;
@@ -50,7 +51,7 @@ function runDictatorCommand(message, mgid, prefixString, server) {
 /**
  * Creates the DJ timer.
  * @param message The message for channel info
- * @param server The server info
+ * @param server {LocalServer} The server info
  * @param duration The duration of the timer
  */
 function createDJTimer(message, server, duration) {
@@ -103,7 +104,7 @@ function getTimeLeft(duration, startTime) {
 /**
  * Handles the validation and provision of DJ permissions to members within a server.
  * @param message The message metadata
- * @param server The server playback metadata
+ * @param server {LocalServer} The server playback metadata
  * @returns {*}
  */
 function runDJCommand(message, server) {
@@ -159,7 +160,7 @@ function runDJCommand(message, server) {
 /**
  * Resigns the active DJ. Uses message.member.
  * @param message The message metadata.
- * @param server The server.
+ * @param server {LocalServer} The server.
  */
 function runResignCommand(message, server) {
   if (!server.voteAdmin.length && !server.dictator) {

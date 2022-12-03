@@ -1,7 +1,7 @@
 const { verifyUrl, verifyPlaylist, linkFormatter, createQueueItem } = require('../utils/utils');
 const { getXdb2 } = require('../database/retrieval');
 const {
-  SPOTIFY_BASE_LINK, StreamType, SOUNDCLOUD_BASE_LINK, TWITCH_BASE_LINK, MAX_QUEUE_S,
+  SPOTIFY_BASE_LINK, StreamType, SOUNDCLOUD_BASE_LINK, TWITCH_BASE_LINK,
 } = require('../utils/lib/constants');
 const { addPlaylistToQueue } = require('../utils/playlist');
 const ytpl = require('ytpl');
@@ -13,7 +13,7 @@ const { isValidRequestWPlay } = require('../utils/validation');
  * @param message The message metadata.
  * @param mgid The message guild id.
  * @param args {string[]} An array of string args to parse, can include multiple terms and a position.
- * @param server The server to use.
+ * @param server {LocalServer} The server to use.
  * @param sheetName {string} The sheet name to use.
  * @returns {Promise<number>} The position to insert or a negative if failed.
  */
@@ -121,7 +121,7 @@ async function runInsertCommand(message, mgid, args, server, sheetName) {
 /**
  * Helper for runInsertCommand. Does some preliminary verification.
  * @param message The message object.
- * @param server The server.
+ * @param server {LocalServer} The server.
  * @param args {Array<string>} args[1] being the term, args[2] being the position.
  * @returns {*} 1 if passed
  */

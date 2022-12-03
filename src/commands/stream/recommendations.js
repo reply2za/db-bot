@@ -11,7 +11,7 @@ const { isCoreAdmin } = require('../../utils/permissions');
  * @param message The message metadata.
  * @param args The message contents in an array.
  * @param uManager bot.users
- * @param server The server metadata.
+ * @param server {LocalServer} The server metadata.
  * @return {Promise<void>}
  */
 async function sendRecommendationWrapper(message, args, uManager, server) {
@@ -64,7 +64,7 @@ async function sendRecommendation(message, content = '', url, uManager, infos) {
  * Plays a recommendation.
  * NOTE: Is in testing phase - allows only isCoreAdmin() usage.
  * @param message The message metadata.
- * @param server The server metadata.
+ * @param server {LocalServer} The server metadata.
  * @param args The message content in an array.
  * @returns {Promise<void>}
  */
@@ -81,7 +81,8 @@ async function playRecommendation(message, server, args) {
   const user = await bot.users.fetch(message.member.id);
   const channel = await user.createDM();
   let num = parseInt(args[1]);
-  let isRelevant = () => {}; // will be redefined
+  // hot-swap function on whether a link is relevant/applicable
+  let isRelevant = () => {return null;};
   if (num < 1) {
     message.channel.send('*provided number must be positive*');
     return;
